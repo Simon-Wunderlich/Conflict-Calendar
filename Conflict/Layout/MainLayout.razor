@@ -1,0 +1,23 @@
+﻿@inherits LayoutComponentBase
+<div class="page">
+	@Body
+</div>
+
+<MudThemeProvider IsDarkMode=true Theme="CustomTheme"/>
+<MudPopoverProvider />
+
+<MudSnackbarProvider/>
+@* Needed for dialogs *@
+<MudDialogProvider />
+
+@code {
+    MudTheme CustomTheme = new MudTheme()
+        {
+            PaletteDark = new PaletteDark()
+            {
+                Info = "#ff7a52",
+                Primary = "#287ca6",
+                // Background = "#212121"
+            }
+        };
+}

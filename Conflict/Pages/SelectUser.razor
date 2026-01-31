@@ -1,0 +1,47 @@
+﻿@inject Blazored.LocalStorage.ILocalStorageService localStorage
+@inject NavigationManager navMan
+<MudDialog>
+    <TitleContent>
+        Select your account
+    </TitleContent>
+    <DialogContent>
+        <div class="d-flex flex-column">
+            @if (users.Count == 0)
+            {
+                <MudText>No accounts available</MudText>
+            }
+            else
+            {                
+                <MudList T="string" @bind-SelectedValue="SelectedUser" SelectionMode="SelectionMode.SingleSelection" Color="@Color.Info">
+                    @foreach(var user in users)
+                    {
+                        <MudListItem Text="@user.Value" Value="@user.Key" />
+				    }
+                </MudList>
+            }
+        </div>
+    </DialogContent>
+    <DialogActions>
+        <MudButton Color="Color.Primary" OnClick="Submit">OK</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private MudDialogInstance MudDialog { get; set; }
+
+    [Parameter]
+    public Dictionary<string, string> users { get; set; }
+
+    string SelectedUser { get; set; }
+
+    private async void Submit()
+    {
+        if (SelectedUser == null)
+			return;
+        await localStorage.SetItemAsync("Name", users[SelectedUser]);
+        await localStorage.SetItemAsync("uid", SelectedUser);
+        MudDialog.Close(DialogResult.Ok(SelectedUser));
+    }
+}
+

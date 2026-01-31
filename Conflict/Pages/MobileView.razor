@@ -1,0 +1,97 @@
+﻿@inject calDb client
+@inject IJSRuntime jsRuntime
+
+<div style="display:flex; width:100vw; height:100vh; align-items:start; justify-content:center" id="mobile">
+	@if (isEditing)
+	{
+		<MudDatePicker PickerVariant="PickerVariant.Static" Orientation="Orientation.Landscape" @bind-Date="date" AdditionalDateClassesFunc="@((DateTime dt)=>(myConflicts.Contains(dt) ?  "mud-selected mud-theme-error" : ""))" Class="editing" IsDateDisabledFunc="@((DateTime dt)=>(dt < start || dt > end))"></MudDatePicker>
+	}
+	else
+	{
+		<MudStack Style="display:flex; align-items:center; width:100vw" Spacing="0">
+			<MudDatePicker PickerVariant="PickerVariant.Static" Orientation="Orientation.Landscape" @bind-Date="date" AdditionalDateClassesFunc="@((DateTime dt) => (getShownConflicts(dt).Count() > 0 ? (3 * getShownConflicts(dt).Count() <= users.Count() ? "mud-warning-text" : (3 * getShownConflicts(dt).Count() <= users.Count() * 2 ? "mud-info-text" : "mud-error-text")) : ""))" IsDateDisabledFunc="@((DateTime dt) => (dt < start || dt > end))"></MudDatePicker>
+			@if (_date != null)
+			{
+				<div style="width:100%; padding:10px; padding-top: 0px;">
+					<MudText Typo="Typo.h6">Conflicts</MudText>
+					<MudDivider/>
+					@if (allConflicts.ContainsKey((DateTime)_date))
+					{
+						@foreach (var name in allConflicts[(DateTime)_date].Where(_ => users.Contains(_)))
+						{
+							<MudText Typo="Typo.body1" Style="margin-left:5px">@allUsers[name]</MudText>
+						}
+					}
+					else
+					{
+						<MudText Typo="Typo.caption" Style="margin-left:5px">No conflicts</MudText>
+					}
+				</div>
+
+			}
+		</MudStack>
+	}
+
+</div>
+
+
+@code {
+	[Parameter]
+	public DateTime start { get; set; }
+	[Parameter]
+	public DateTime end { get; set; }
+
+
+	[Parameter]
+	public bool isEditing { get; set; }
+
+	[Parameter]
+	public Dictionary<DateTime, List<string>> allConflicts { get; set; }
+
+	[Parameter]
+	public List<DateTime?> myConflicts { get; set; }
+
+	[Parameter]
+	public List<string> users { get; set; }
+
+	[Parameter]
+	public Dictionary<string, string> allUsers { get; set; }
+
+	MudDatePicker _picker;
+
+	private DateTime? _date { get; set; }
+	private DateTime? date
+	{
+		get => _date;
+		set
+		{
+			_date = value;
+			toggle();
+		}
+	}
+	protected override async Task OnInitializedAsync()
+	{
+		// _date = DateTime.MinValue;
+		// _picker.on
+	}
+	public async void toggle()
+	{
+		if (_date == null || !isEditing)
+			return;
+
+		if (!myConflicts.Contains(_date))
+			myConflicts.Add(_date);
+		else
+			myConflicts.Remove(_date);
+		_date = null;
+
+	}
+
+
+	public List<string> getShownConflicts(DateTime dt)
+	{
+		if (!allConflicts.ContainsKey(dt))
+			return new List<string>();
+		return allConflicts[dt].Where(_ => users.Contains(_)).ToList();
+	}
+}

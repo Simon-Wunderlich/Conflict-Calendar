@@ -1,0 +1,41 @@
+﻿@inject IDialogService DialogService
+
+<div style="display:flex; width:100vw; height:100vh; align-items:center; justify-content:center">
+	<MudStack Style="align-items: center;">
+		<MudText Typo="Typo.h4">@calName</MudText>
+		<MudPaper Style="justify-content: center; display: flex; padding:1rem;">
+			<MudStack Style="justify-content: center; display: flex; padding:1rem;">
+				<MudText Typo="Typo.h6">Enter your name</MudText>
+				<MudTextField @bind-Text="name" T="string" Placeholder="John Smith" MaxLength="10"></MudTextField>
+				<MudButton OnClick="enter">Join</MudButton>
+			</MudStack>
+		</MudPaper>
+		<MudButton Variant="Variant.Text" Style="font-size:12px; width:fit-content" OnClick="openSelectUserDialog">Already joined with another account?</MudButton>
+	</MudStack>
+</div>
+@code {
+	[Parameter]
+	public EventCallback<string> enterName { get; set; }
+	public string name { get; set; }
+	[Parameter]
+	public string calName { get; set; }
+	[Parameter]
+	public Dictionary<string, string> users { get; set; }
+
+	public async void enter()
+	{
+		if(name != null && name != "")
+			await enterName.InvokeAsync(name);
+	}
+	public async void openSelectUserDialog()
+	{
+		var parameter = new DialogParameters<SelectUser>
+		{
+			{ "users", users }
+		};
+		var dialog = await DialogService.ShowAsync<SelectUser>("SelectUser", parameter);
+		var result = await dialog.Result;
+		if (!result.Canceled)
+			await enterName.InvokeAsync(result.Data.ToString());
+	}
+}

@@ -1,0 +1,104 @@
+﻿@inject calDb client
+@inject IJSRuntime jsRuntime
+
+<div style="display:flex; width:100vw; height:100vh; align-items:center; justify-content:center" id="desktop">
+	@if (isEditing)
+	{
+		<MudDatePicker PickerVariant="PickerVariant.Static" Orientation="Orientation.Landscape" @bind-Date="date" AdditionalDateClassesFunc="@((DateTime dt)=>(myConflicts.Contains(dt) ?  "mud-selected mud-theme-error" : ""))" IsDateDisabledFunc="@((DateTime dt)=>(dt < start || dt > end))" Class="editing"></MudDatePicker>
+	}
+	else{
+		<MudDatePicker PickerVariant="PickerVariant.Static" Orientation="Orientation.Landscape" @bind-Date="date" AdditionalDateClassesFunc="@((DateTime dt)=>(getShownConflicts(dt).Count() > 0 ? (3*getShownConflicts(dt).Count() <= users.Count() ? "mud-warning-text" : (3*getShownConflicts(dt).Count() <= users.Count()* 2 ? "mud-info-text" : "mud-error-text")) : ""))" IsDateDisabledFunc="@((DateTime dt)=>(dt < start || dt > end))"></MudDatePicker>
+	}
+</div>
+
+
+@code {
+	[Parameter]
+	public DateTime start { get; set; }
+	[Parameter]
+	public DateTime end { get; set; }
+
+
+	[Parameter]
+	public bool isEditing { get; set; }
+
+	[Parameter]
+	public Dictionary<DateTime, List<string>> allConflicts { get; set; }
+
+	[Parameter]
+	public List<DateTime?> myConflicts { get; set; }
+
+	[Parameter]
+	public List<string> users
+	{
+		get => _users; set
+		{
+			_users = value;
+			updateUserList();
+		}
+	}
+	List<string> _users = new List<string>();
+
+	[Parameter]
+	public Dictionary<string, string> allUsers { get; set; }
+
+	MudDatePicker _picker;
+
+	private DateTime? _date { get; set; }
+	private DateTime? date {
+		get => _date;
+		set {
+			_date = value;
+			toggle(); 
+		}
+	}
+
+	protected override async Task OnAfterRenderAsync(bool firstRender)
+	{
+		if (firstRender)
+		{
+			await jsRuntime.InvokeVoidAsync("init");
+		}
+	}
+	public async void toggle()
+	{
+		if (_date == null)
+			return;
+		if (!isEditing)
+		{
+			@if (_date != null)
+			{
+				await updateUserList();
+			}
+			return;
+		}
+		if (!myConflicts.Contains(_date))
+			myConflicts.Add(_date);
+		else
+			myConflicts.Remove(_date);
+		_date = null;
+		StateHasChanged();
+	}
+
+	public async Task updateUserList()
+	{
+		if (allConflicts == null || _date == null)
+			return;
+		@if (allConflicts.ContainsKey((DateTime)_date))
+		{
+
+			string names = string.Join("<br>", allConflicts[(DateTime)_date].Where(_ => users.Contains(_)).Select(_ => allUsers[_]));
+			await jsRuntime.InvokeVoidAsync("editList", names);
+
+		}
+		else
+			await jsRuntime.InvokeVoidAsync("editList", "No conflicts");
+	}
+
+	public List<string> getShownConflicts(DateTime dt)
+	{
+		if (!allConflicts.ContainsKey(dt))
+			return new List<string>();
+		return allConflicts[dt].Where(_ => users.Contains(_)).ToList();
+	}
+}

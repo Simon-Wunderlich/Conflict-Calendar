@@ -1,0 +1,312 @@
+﻿@page "/{id}"
+@inject Blazored.LocalStorage.ILocalStorageService localStorage
+@inject NavigationManager navMan
+@inject IJSRuntime jsRuntime
+@inject IDialogService DialogService
+@inject calDb client
+@if(!loaded) {}
+else if(name == null)
+{
+	<SelectName enterName="setName" calName="@calName" users ="users"/>
+}
+else if (!users.ContainsValue(name))
+{
+	<ConfirmAcct setUser="setUser" calName="@calName" users="@users" name="@name"/>
+}
+else if (isMobile)
+{
+	<MudAppBar Dense="true" Style="position: static;">
+		<MudText>@calName</MudText>
+		<div class="d-flex">
+			<MudIconButton Icon="@Icons.Material.Rounded.People" OnClick="() => {togglePopover = !togglePopover;}"/>
+			<MudPopover Open="togglePopover" Class="px-4 pt-4" Style="padding: 16px; left: 0 !important;" AnchorOrigin="Origin.BottomCenter" TransformOrigin="Origin.TopCenter" OverflowBehavior="OverflowBehavior.FlipNever">
+				<div class="d-flex flex-column">
+					@if (users.Count() > 0)
+					{
+						@if (!edit)
+						{
+							<MudList T="string" @bind-SelectedValues="shownUsers" SelectionMode="SelectionMode.MultiSelection" CheckBoxColor="Color.Tertiary">
+								@foreach (var user in users)
+								{
+									<MudListItem Text="@user.Value" Value="@user.Key" />
+								}
+							</MudList>
+						}
+						else
+						{
+							@foreach (string user in users.Values)
+							{
+								<MudText Style="max-width: 200px; overflow: hidden; text-overflow: ellipsis; text-wrap: nowrap;">@user</MudText>
+							}
+						}
+					}
+					else
+					{
+						<MudText>No entries</MudText>
+					}
+				</div>
+			</MudPopover>
+		</div>
+		<MudIconButton Icon="@Icons.Material.Rounded.ContentCopy" OnClick="copy"></MudIconButton>
+		<MudSpacer />
+		@if (!loading)
+		{
+			<MudIconButton Icon="@Icons.Material.Filled.Refresh" OnClick="update" />
+		}
+		else
+		{
+			<MudProgressCircular Color="Color.Default" Indeterminate="true" Size="Size.Small" />
+		}
+		<MudButton Variant="Variant.Text" OnClick="toggleEdit" Color="Color.Primary">@buttonTxt</MudButton>
+	</MudAppBar>
+	<MobileView isEditing="edit" allConflicts="_allConflictsDt" myConflicts="_myConflicts" users="shownUsers.ToList()" allUsers="users" start="start" end="end" />
+}
+else
+{
+	<MudAppBar Dense="true">
+		<MudText>@calName</MudText>
+		<div class="d-flex">
+			<MudIconButton Icon="@Icons.Material.Rounded.People" OnClick="() => {togglePopover = !togglePopover;}" />
+			<MudPopover Open="togglePopover" Class="px-4 pt-4" Style="padding: 16px; left: 0 !important;" AnchorOrigin="Origin.BottomCenter" TransformOrigin="Origin.TopCenter" OverflowBehavior="OverflowBehavior.FlipNever">
+				<div class="d-flex flex-column">
+					@if(users.Count() > 0) {
+						@if(!edit)
+						{
+							<MudList T="string" @bind-SelectedValues="shownUsers" SelectionMode="SelectionMode.MultiSelection" CheckBoxColor="Color.Tertiary">
+								@foreach(var user in users)
+								{
+									<MudListItem Text="@user.Value" Value="@user.Key" />
+								}
+							</MudList>
+						}
+						else
+						{
+							@foreach(string user in users.Values)
+							{
+								<MudText Style="max-width: 200px; overflow: hidden; text-overflow: ellipsis; text-wrap: nowrap;">@user</MudText>
+							}							
+						}
+					}
+					else
+					{
+						<MudText>No entries</MudText>
+					}
+				</div>
+			</MudPopover>
+		</div>
+		<MudIconButton Icon="@Icons.Material.Rounded.ContentCopy" OnClick="copy"></MudIconButton>
+		<MudSpacer />
+		@if (!loading)
+		{
+			<MudIconButton Icon="@Icons.Material.Filled.Refresh" OnClick="update" />
+		}
+		else
+		{
+			<MudProgressCircular Color="Color.Default" Indeterminate="true" Size="Size.Small" />
+		}
+		<MudButton Variant="Variant.Text" OnClick="toggleEdit" Color="Color.Primary">@buttonTxt</MudButton>
+	</MudAppBar>
+	<DesktopView isEditing="edit" allConflicts="_allConflictsDt" myConflicts="_myConflicts" users="shownUsers.ToList()" allUsers ="users" start="start" end="end"/>
+}
+@inject ISnackbar Snackbar
+@inject IJSRuntime js
+
+@code {
+	[Parameter]
+	public string id {get; set;}
+
+	DateTime start = DateTime.MinValue;
+	DateTime end = DateTime.MaxValue;
+	public string name { get; set; }
+	public string userid;
+	public bool isMobile = true;
+
+	public IReadOnlyCollection<string> shownUsers = new List<string>();
+
+	string buttonTxt = "Edit";
+	bool edit = false;
+
+	bool loaded = false;
+
+	bool loading = false;
+	List<Dictionary<string, string>> cals = new List<Dictionary<string, string>>();
+
+	string calName = "";
+	Dictionary<string, List<string>> _allConflicts = new Dictionary<string, List<string>>();
+	Dictionary<DateTime, List<string>> _allConflictsDt = new Dictionary<DateTime, List<string>>();
+	List<DateTime?> _myConflicts = new List<DateTime?>();
+	Dictionary<string, string> users = new Dictionary<string,string>();
+
+	bool togglePopover = false;
+
+	protected override async Task OnInitializedAsync()
+	{
+
+		isMobile = await jsRuntime.InvokeAsync<bool>("isDevice");
+		if (await localStorage.ContainKeyAsync("Name"))
+		{
+			name = await localStorage.GetItemAsync<string>("Name");
+			userid = await localStorage.GetItemAsync<string>("uid");	
+		}
+		//StateHasChanged();
+		try
+		{			
+			JObject calendar = await client.get(id);
+			calName = calendar["record"]["Name"].ToString();
+			_allConflicts = calendar["record"]["Dates"].ToObject<Dictionary<string, List<string>>>();
+			users = calendar["record"]["Users"].ToObject<Dictionary<string, string>>();
+			if (users != null)
+			{
+				shownUsers = users.Keys;
+			}
+			start = DateTime.ParseExact(calendar["record"]["Start"].ToString(), "dd/MM/yyyy", null);
+			end = DateTime.ParseExact(calendar["record"]["End"].ToString(), "dd/MM/yyyy", null);
+		} 
+		catch
+		{
+			navMan.NavigateTo("/");
+		}
+		_myConflicts = new List<DateTime?>();
+		foreach (var kvp in _allConflicts)
+		{
+			if (kvp.Value.Contains(userid))
+				_myConflicts.Add(DateTime.ParseExact(kvp.Key, "dd/MM/yyyy", null));
+			_allConflictsDt.Add(DateTime.ParseExact(kvp.Key, "dd/MM/yyyy", null), kvp.Value);
+		}
+		await updateUser();
+		loaded = true;
+		StateHasChanged();
+	}
+
+	async Task setUser(string ?uid)
+	{
+		if (uid != null)
+		{
+			userid = uid;
+			name = users[uid];
+			await localStorage.SetItemAsync("Name", name);
+			await localStorage.SetItemAsync("uid", userid);
+		}
+		if (!users.ContainsKey(userid))
+			users.Add(userid, name);
+		shownUsers = users.Keys;
+
+		_myConflicts = new List<DateTime?>();
+		foreach (var kvp in _allConflicts)
+		{
+			if (kvp.Value.Contains(userid))
+				_myConflicts.Add(DateTime.ParseExact(kvp.Key, "dd/MM/yyyy", null));
+			if (!_allConflictsDt.ContainsKey(DateTime.ParseExact(kvp.Key, "dd/MM/yyyy", null)))
+				_allConflictsDt.Add(DateTime.ParseExact(kvp.Key, "dd/MM/yyyy", null), kvp.Value);
+		}
+	}
+
+	async void setName(string _name)
+	{
+		if (users.ContainsKey(_name))
+		{
+			await setUser(_name);
+			return;
+		}
+		name = _name;
+		loaded = false;
+		StateHasChanged();
+		await localStorage.SetItemAsync("Name", name);
+		Dictionary<string, string> thisCal = new Dictionary<string, string>()
+			{
+				["Name"] = calName,
+				["id"] = id,
+				["Expiry"] = end.ToString("dd/MM/yyyy") != "31/12/9999" ? end.ToString("dd/MM/yyyy") : "never"
+			};
+		cals.Add(thisCal);
+		userid = await client.initUser(cals, name);
+		await localStorage.SetItemAsync("uid", userid);
+
+
+		if (cals.Where(_ => _["id"] == id).Count() == 0)
+		{
+			thisCal = new Dictionary<string, string>()
+				{
+					["Name"] = calName,
+					["id"] = id,
+					["Expiry"] = end.ToString("dd/MM/yyyy") != "31/12/9999" ? end.ToString("dd/MM/yyyy") : "never"
+				};
+			cals.Add(thisCal);
+			await client.updateUser(cals, userid);
+		}
+		edit = true;
+		buttonTxt = "Done";
+		await DialogService.ShowAsync<Tutorial>();
+		users.Add(userid, name);
+		shownUsers = users.Keys;
+		loaded = true;
+		StateHasChanged();
+	}
+	async void toggleEdit()
+	{
+		buttonTxt = edit ? "Edit" : "Done";
+		edit = !edit;
+		if (!edit) {
+			await update();
+			if (!isMobile)
+			{	
+				await jsRuntime.InvokeVoidAsync("init");
+			}
+		}
+	}
+
+	async Task update()
+	{
+		loading = true;
+		StateHasChanged();
+
+		JObject calendar = await client.update(id, name, userid, _myConflicts);
+		calName = calendar["record"]["Name"].ToString();
+		_allConflicts = calendar["record"]["Dates"].ToObject<Dictionary<string, List<string>>>();
+		users = calendar["record"]["Users"].ToObject<Dictionary<string, string>>();
+		_allConflictsDt = new Dictionary<DateTime, List<string>>();
+		_myConflicts = new List<DateTime?>();
+
+		foreach (var kvp in _allConflicts)
+		{
+			if (kvp.Value.Contains(userid))
+				_myConflicts.Add(DateTime.ParseExact(kvp.Key, "dd/MM/yyyy", null));
+			_allConflictsDt.Add(DateTime.ParseExact(kvp.Key, "dd/MM/yyyy", null), kvp.Value);
+		}
+
+		loading = false;
+		StateHasChanged();
+	}
+
+	async Task updateUser()
+	{
+		if (await localStorage.ContainKeyAsync("uid"))
+		{
+			userid = await localStorage.GetItemAsync<string>("uid");
+			cals = (await client.get(userid))["record"].ToObject<List<Dictionary<string, string>>>();
+
+			if (cals.Where(_ => _["id"] == id).Count() == 0)
+			{
+
+				Dictionary<string, string> thisCal = new Dictionary<string, string>()
+					{
+						["Name"] = calName,
+						["id"] = id,
+						["Expiry"] = end.ToString("dd/MM/yyyy") != "31/12/9999" ? end.ToString("dd/MM/yyyy") : "never"
+					};
+				cals.Add(thisCal);
+				await client.updateUser(cals, userid);
+			}
+		}
+	}
+
+	async void copy()
+	{
+		string text = "https://conflix-calendar.web.app/" + id;
+		await js.InvokeVoidAsync("clipboardCopy.copyText", text);
+		Snackbar.Add("Copied!", Severity.Normal, (options) =>
+		{
+			options.CloseAfterNavigation = true;
+		});
+	}
+}

@@ -1,0 +1,121 @@
+﻿ @page "/"
+ @inject NavigationManager navMan
+ @inject calDb client
+ @inject Blazored.LocalStorage.ILocalStorageService localStorage
+
+<div style="display:flex; width:100vw; height:100vh; align-items:center; justify-content:center">
+	<MudStack Style="justify-content: center; display: flex; padding:1rem;">
+		<MudText Typo="Typo.h3" Style="align-self: center;display: flex;">Conflix</MudText>
+		<MudPaper Style="justify-content: center; display: flex; padding:1rem;">
+			<MudStack Style="justify-content: center; display: flex; padding:1rem;">
+				<MudText Typo="Typo.h4">Create calendar</MudText>
+				<MudForm @ref="form" @bind-IsValid="@success">
+					<MudText Typo="Typo.h6">Calendar name</MudText>
+					<MudTextField @bind-Text="calName" T="string" Placeholder="Enter name" Required="true" RequiredError="Name is required!" MaxLength="20"></MudTextField>
+					<MudText Typo="Typo.h6">Date range (optional)</MudText>
+					<MudDateRangePicker @bind-DateRange="_dateRange" PlaceholderStart="Start Date" PlaceholderEnd="End Date" Style="top: 0; left: 0" />
+					<MudButton OnClick="create" Color="Color.Primary" Class="align-self-center create-btn" Style="width:fit-content;">Create</MudButton>
+				</MudForm>
+			</MudStack>
+		</MudPaper>
+		<MudButton Class="align-self-center" OnClick="_ => openCalendars = true" Variant="Variant.Filled" Style="width:fit-content;" Size="Size.Small" DropShadow="true">Browse my calendars</MudButton>
+	</MudStack>
+	<MudDrawer @bind-Open="@openCalendars" Anchor="@Anchor.End" Elevation="1" Variant="@DrawerVariant.Temporary" OverlayAutoClose="true">
+		<MudDrawerHeader>
+			<MudText Typo="Typo.h6">My Calendars</MudText>
+			
+		</MudDrawerHeader>
+		<MudNavMenu>
+			@foreach(var calendar in calendars)
+			{
+				<MudCard @onclick="_ => ToggleOpen(calendar)" Style="margin:6px; cursor:pointer;">
+					<MudCardHeader Style="padding:10px 10px 0 10px ">
+						<CardHeaderContent>
+							<MudText Typo="Typo.h6">@calendar["Name"]</MudText>
+						</CardHeaderContent>
+						<CardHeaderActions>
+							<MudIconButton Icon="@Icons.Material.Rounded.Delete" Color="Color.Default" OnClick="_ => { remove(calendar); }"/>
+						</CardHeaderActions>
+					</MudCardHeader>
+					<MudCardContent Style="padding: 0 10px 10px 10px;">
+						<MudText Typo="Typo.caption" Style="font-style: italic">Expires @calendar["Expiry"]</MudText>
+					</MudCardContent>
+				</MudCard>
+			}
+		</MudNavMenu>
+		<MudSpacer/>
+		<MudDrawerContainer>
+			<MudSpacer/>
+			<MudButton Class="align-self-end" Style="width:fit-content" Variant="Variant.Text" OnClick="_ => openCalendars = false">Back</MudButton>
+		</MudDrawerContainer>
+	</MudDrawer>
+</div>
+
+@code {
+	private DateRange _dateRange { get; set; }
+	private string calName { get; set; }
+	string id { get; set; }
+
+	bool success;
+	MudForm form;
+
+	List<Dictionary<string, string>> calendars = new List<Dictionary<string, string>>();
+	private void ToggleOpen(Dictionary<string, string> calendar) => navMan.NavigateTo("/" + calendar["id"]);
+	bool openCalendars = false;
+
+	public async void create()
+	{
+		await form.Validate();
+		if (success)
+		{
+			var rand = new Random();
+			string id = await client.create(calName, _dateRange);
+			navMan.NavigateTo("/" + id.ToString());
+		}
+	}
+
+	protected override async Task OnAfterRenderAsync(bool firstRender)
+	{
+		if (firstRender)
+		{
+			if (await localStorage.ContainKeyAsync("uid"))
+			{
+				id = await localStorage.GetItemAsync<string>("uid");
+				JObject calsObj = await client.get(id);
+				calendars = calsObj["record"].ToObject<List<Dictionary<string, string>>>();
+				for (int i = 0; i < calendars.Count(); i++)
+				{
+					var x = calendars[i];
+					if (x["Expiry"] != "never")
+					{
+						if (DateTime.ParseExact(x["Expiry"].ToString(), "dd/MM/yyyy", null) < DateTime.UtcNow)
+						{
+							calendars.Remove(x);
+							await client.delete(x["id"]);
+							i--;
+						}
+					}
+				}
+				await client.updateUser(calendars, id);
+			}
+		}
+	}
+
+	async Task remove(Dictionary<string, string> cal)
+	{
+		string calId = cal["id"];
+
+		calendars.Remove(calendars.Where(_ => _["id"] == calId).First());
+		await client.updateUser(calendars, id);
+		if (calendars.Count() == 0)
+			await localStorage.RemoveItemAsync("uid");
+
+		string name = await localStorage.GetItemAsync<string>("Name");
+		JObject calObj = await client.update(calId, name, id, new List<DateTime?>(), true);
+		if(calObj["record"]["Users"].Count() == 0)
+		{
+			await client.delete(calId);
+		}
+
+	}
+}

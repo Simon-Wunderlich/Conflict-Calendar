@@ -1,0 +1,19 @@
+﻿<MudDialog>
+    <DialogContent>
+        <div class="d-flex flex-column">
+            <MudText Typo="Typo.h6" Class="mb-2">Tap to highlight days you're busy</MudText>
+            <MudText Typo="Typo.body2" Class="mb-2">Tap "DONE" to submit</MudText>
+        </div>
+    </DialogContent>
+    <DialogActions>
+        <MudButton Color="Color.Primary" OnClick="Submit">OK</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private MudDialogInstance MudDialog { get; set; }
+
+    private void Submit() => MudDialog.Close(DialogResult.Ok(true));
+}
+
